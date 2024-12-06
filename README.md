@@ -9,6 +9,13 @@
     make，
     进入bin目录下分别启动./clent和./server，
     注：./client和./server需要提供-i ../test_conf(保存服务端的ip和port)
+## 库准备
+    muduo,https://blog.csdn.net/QIANGWEIYUAN/article/details/89023980
+    zookeeper:
+    安装 Zookeeper,sudo apt install libzookeeper-mt-dev
+    安装 Zookeeper 开发库,sudo apt install libzookeeper-mt-dev
+    protoc，本地版本为3.12.4，ubuntu22使用sudo apt-get install protobuf-compiler libprotobuf-dev安装默认就是这个版本
+
 ## 整体的框架
 muduo库：负责数据流的网络通信，采用了多线程epoll模式的IO多路复用，让服务发布端接受服务调用端的连接请求，并由绑定的回调函数处理调用端的函数调用请求
 
