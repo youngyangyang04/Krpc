@@ -5,10 +5,8 @@
 ## 运行环境
     Ubuntu 20.04 LTS
 ## 编译指令
-    在最开始的外围目录下执行：
-    make，
-    进入bin目录下分别启动./clent和./server，
-    注：./client和./server需要提供-i ../test_conf(保存服务端的ip和port)
+    mkdir build && cd build && cmake .. && make
+    进入到example目录下，运行./server和./client，即可完成服务发布和调用。
 ## 库准备
     muduo,https://blog.csdn.net/QIANGWEIYUAN/article/details/89023980
     zookeeper:
@@ -24,3 +22,8 @@ protobuf：负责rpc方法的注册，数据的序列化和反序列化，相比
 zookeeper：负责分布式环境的服务注册，记录服务所在的ip地址以及port端口号，可动态地为调用端提供目标服务所在发布端的ip地址与端口号，方便服务所在ip地址变动的及时更新
 
 TCP沾包问题处理：定义服务发布端和调用端之间的消息传输格式，记录方法名和参数长度，防止沾包。
+
+后续增加了glog的日志库，进行异步的日志记录。
+
+## 性能测试
+在Kclient中进行了手写了一个简单的测试，可以作为一个性能参考，目前还不是最优还在继续优化。
