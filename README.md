@@ -9,12 +9,28 @@
     进入到example目录下，运行./server和./client，即可完成服务发布和调用。
 
 ## 库准备
-    muduo,https://blog.csdn.net/QIANGWEIYUAN/article/details/89023980
-    zookeeper:
-    安装 Zookeeper,sudo apt install libzookeeper-mt-dev
-    安装 Zookeeper 开发库,sudo apt install libzookeeper-mt-dev
-    protoc，本地版本为3.12.4，ubuntu22使用sudo apt-get install protobuf-compiler libprotobuf-dev安装默认就是这个版本
-    glog安装：sudo apt-get install libgoogle-glog-dev libgflags-dev
+1. Muduo 库的安装
+Muduo 是一个基于多线程 Epoll 模式的高效网络库，负责数据流的网络通信。
+安装教程参考：[Mudo安装](https://blog.csdn.net/QIANGWEIYUAN/article/details/89023980)
+
+2. Zookeeper 的安装
+Zookeeper 负责服务注册与发现，动态记录服务的 IP 地址及端口号，以便调用端快速找到目标服务。
+安装步骤：
+安装 Zookeeper：
+sudo apt install libzookeeper-mt-dev
+安装 Zookeeper 开发库：
+sudo apt install libzookeeper-mt-dev
+
+3. Protobuf 的安装
+Protobuf 负责 RPC 方法的注册、数据的序列化与反序列化。
+相较于 XML 和 JSON，Protobuf 是二进制存储，效率更高。
+本地版本：3.12.4
+在 Ubuntu 22 上可以直接安装：
+sudo apt-get install protobuf-compiler libprotobuf-dev
+
+4. Glog 日志库的安装
+Glog 是一个高效的异步日志库，用于记录框架运行时的调试与错误日志。
+sudo apt-get install libgoogle-glog-dev libgflags-dev
 ## 整体的框架
 muduo库：负责数据流的网络通信，采用了多线程epoll模式的IO多路复用，让服务发布端接受服务调用端的连接请求，并由绑定的回调函数处理调用端的函数调用请求
 
