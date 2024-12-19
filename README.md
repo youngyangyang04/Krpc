@@ -5,9 +5,9 @@
 ## 运行环境
     Ubuntu 20.04 LTS
 ## 编译指令
-    mkdir build && cd build && cmake .. && make
+    mkdir build && cd build && cmake .. && make -j${4} sudo make install.
     进入到example目录下，运行./server和./client，即可完成服务发布和调用。
-
+    注意：需要重新编译只需要在build目录下执行make -j${4} 即可。
 ## 库准备
 1. Muduo 库的安装
 Muduo 是一个基于多线程 Epoll 模式的高效网络库，负责数据流的网络通信。
@@ -43,4 +43,4 @@ TCP沾包问题处理：定义服务发布端和调用端之间的消息传输�
 后续增加了glog的日志库，进行异步的日志记录。
 
 ## 性能测试
-在Kclient中进行了手写了一个简单的测试，可以作为一个性能参考，目前还不是最优还在继续优化。
+通过运行example目录下的server和client，测试了性能，但是并不是高效的。
