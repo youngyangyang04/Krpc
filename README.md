@@ -13,30 +13,87 @@
 
 ## 编译指令
 
-    mkdir build && cd build && cmake .. && make
-    进入到example目录下，运行./server和./client，即可完成服务发布和调用。
+    进入到Krpc文件
+    ```shell
+    cd Krpc
+    ```
 
+    运行
+    ```shell
+    mkdir build && cd build && cmake .. && make -j${4} 
+    ```
+
+    ```shell
+    sudo make install.
+    ```
+    
+    进入到example目录下，运行./server和./client，即可完成服务发布和调用。
+    server:
+    ```shell
+    ./server -i ../test.conf
+    ```
+    
+    client:
+    ```shell
+    ./client -i ../test.conf
+    ```
+    
+    **注意**： 需要重新编译只需要在build目录下执行MAKE -J${4} 即可。
 ## 库准备
 
-    muduo,https://blog.csdn.net/QIANGWEIYUAN/article/details/89023980
-    zookeeper:
-    安装 Zookeeper,sudo apt install libzookeeper-mt-dev
-    安装 Zookeeper 开发库,sudo apt install libzookeeper-mt-dev
-    protoc，本地版本为3.12.4，ubuntu22使用sudo apt-get install protobuf-compiler libprotobuf-dev安装默认就是这个版本
-    glog安装：sudo apt-get install libgoogle-glog-dev libgflags-dev
+1. Muduo 库的安装
+Muduo 是一个基于多线程 Epoll 模式的高效网络库，负责数据流的网络通信。
+安装教程参考：[Mudo安装](https://blog.csdn.net/QIANGWEIYUAN/article/details/89023980)
+
+2. Zookeeper 的安装
+Zookeeper 负责服务注册与发现，动态记录服务的 IP 地址及端口号，以便调用端快速找到目标服务。
+安装步骤：
+安装 Zookeeper：
+```shell
+sudo apt install zookeeperd
+```
+安装 Zookeeper 开发库：
+```shell
+sudo apt install libzookeeper-mt-dev
+```
+
+3. Protobuf 的安装
+Protobuf 负责 RPC 方法的注册、数据的序列化与反序列化。
+相较于 XML 和 JSON，Protobuf 是二进制存储，效率更高。
+本地版本：3.12.4
+在 Ubuntu 22 上可以直接安装：
+```shell
+sudo apt-get install protobuf-compiler libprotobuf-dev
+```
+
+4. Glog 日志库的安装
+Glog 是一个高效的异步日志库，用于记录框架运行时的调试与错误日志。
+```shell
+sudo apt-get install libgoogle-glog-dev libgflags-dev
+```
 
 ## 整体的框架
 
-muduo库：负责数据流的网络通信，采用了多线程epoll模式的IO多路复用，让服务发布端接受服务调用端的连接请求，并由绑定的回调函数处理调用端的函数调用请求
+- **muduo库**：负责数据流的网络通信，采用了多线程epoll模式的IO多路复用，让服务发布端接受服务调用端的连接请求，并由绑定的回调函数处理调用端的函数调用请求。
 
-protobuf：负责rpc方法的注册，数据的序列化和反序列化，相比于文本存储的xml和json来说，protobuf是二进制存储，且不需要存储额外的信息，效率更高
+- **Protobuf**：负责RPC方法的注册，数据的序列化和反序列化，相比于文本存储的XML和JSON来说，Protobuf是二进制存储，且不需要存储额外的信息，效率更高。
 
-zookeeper：负责分布式环境的服务注册，记录服务所在的ip地址以及port端口号，可动态地为调用端提供目标服务所在发布端的ip地址与端口号，方便服务所在ip地址变动的及时更新
+- **Zookeeper**：负责分布式环境的服务注册，记录服务所在的IP地址以及端口号，可动态地为调用端提供目标服务所在发布端的IP地址与端口号，方便服务所在IP地址变动的及时更新。
 
-TCP沾包问题处理：定义服务发布端和调用端之间的消息传输格式，记录方法名和参数长度，防止沾包。
+- **TCP沾包问题处理**：定义服务发布端和调用端之间的消息传输格式，记录方法名和参数长度，防止沾包。
 
-后续增加了glog的日志库，进行异步的日志记录。
+- **Glog日志库**：后续增加了Glog的日志库，进行异步的日志记录。
 
 ## 性能测试
 
-在Kclient中进行了手写了一个简单的测试，可以作为一个性能参考，目前还不是最优还在继续优化。
+通过运行example目录下的server和client就可以看见结果，测试了性能，但是并不是高效的。
+
+## 运行结果
+![image.png](./img/微信图片_20250108190746.png)
+## 总结
+- Krpc是一个基于protobuf的C++分布式网络通信框架，旨在简化微服务的部署与调用。
+- 通过结合Muduo库、Zookeeper和Glog，Krpc提供了高效的网络通信、服务注册与发现以及日志记录功能。
+- 该框架支持高并发的远程函数调用，允许开发者专注于业务逻辑的实现。
+- 项目的设计考虑了性能和易用性，适合在现代分布式系统中使用。
+- 未来将继续完善，欢迎更多开发者参与学习与贡献。
+

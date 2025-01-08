@@ -1,6 +1,7 @@
 #include "Krpcprovider.h"
 #include "Krpcapplication.h"
 #include "Krpcheader.pb.h"
+#include "KrpcLogger.h"
 #include <iostream>
 
 /// 这个函数用于注册服务对象和其对应的 RPC 方法，以便服务端处理客户端的请求。
@@ -103,38 +104,46 @@ void KrpcProvider::OnMessage(const muduo::net::TcpConnectionPtr &conn, muduo::ne
     // 网络上接收远程rpc调用请求的字符流
     std::string recv_buf = buffer->retrieveAllAsString();
 
-    // 从字符流中读取前4个字节的内容。
-    uint32_t header_size = 0;
-    recv_buf.copy((char *)&header_size, 4, 0);
-    // 根据hender_size读取到数据头原始字符流，反序列化数据，得到rpc的详细请求。
-    std::string rpc_header_str = recv_buf.substr(4, header_size); // 获取rpc头数据
-    Krpc::RpcHeader rpcheader;
+    //使用porotbuf的CodeInputStream反序列化rpc请求
+    google::protobuf::io::ArrayInputStream raw_input(recv_buf.data(), recv_buf.size());
+    google::protobuf::io::CodedInputStream coded_input(&raw_input);
+
+    uint32_t header_size{};
+    coded_input.ReadVarint32(&header_size);// 解析header_size
+    // 根据header_size读取数据头的原始字符流，反序列化数据，得到rpc请求的详细信息
+    std::string rpc_header_str;
+    Krpc::RpcHeader krpcHeader;
     std::string service_name;
     std::string method_name;
-    uint32_t args_size;
-    if (rpcheader.ParseFromString(rpc_header_str)) // 解析头数据对其进行反序列化
-    {
-        // 反序列化头部成功
-        service_name = rpcheader.service_name();
-        method_name = rpcheader.method_name();
-        args_size = rpcheader.args_size();
-    }
-    else
-    {
-        // 反序列化失败
-        std::cout << "rpc_header_str" << rpc_header_str << "parse error!" << std::endl;
+    uint32_t args_size{};
+    // 设置读取限制
+    google::protobuf::io::CodedInputStream::Limit msg_limit = coded_input.PushLimit(header_size);
+    coded_input.ReadString(&rpc_header_str, header_size);
+    // 恢复之前的限制，以便安全地继续读取其他数据
+    coded_input.PopLimit(msg_limit);
+    if(krpcHeader.ParseFromString(rpc_header_str)){
+        service_name = krpcHeader.service_name();
+        method_name = krpcHeader.method_name();
+        args_size=krpcHeader.args_size();
+    }else{
+        KrpcLogger::ERROR("krpcHeader parse error");
         return;
     }
-    // 获取rpc方法参数的字符流数据
-    std::string args_str = recv_buf.substr(4 + header_size, args_size);
+    std::string args_str;// rpc参数
+    // 直接读取args_size长度的字符串数据
+    bool read_args_success=coded_input.ReadString(&args_str,args_size);
+    if(!read_args_success){
+        KrpcLogger::ERROR("read args error");
+        return ;
+    }
     // 打印调试信息
-    std::cout << "============================================" << std::endl;
-    std::cout << "header_size: " << header_size << std::endl;
-    std::cout << "rpc_header_str: " << rpc_header_str << std::endl;
-    std::cout << "service_name: " << service_name << std::endl;
-    std::cout << "method_name: " << method_name << std::endl;
-    std::cout << "args_str: " << args_str << std::endl;
-    std::cout << "============================================" << std::endl;
+    // std::cout << "============================================" << std::endl;
+    // std::cout << "header_size: " << header_size << std::endl;
+    // std::cout << "rpc_header_str: " << rpc_header_str << std::endl;
+    // std::cout << "service_name: " << service_name << std::endl;
+    // std::cout << "method_name: " << method_name << std::endl;
+    // std::cout << "args_str: " << args_str << std::endl;
+    // std::cout << "============================================" << std::endl;
 
     // 获取service对象和method对象
     auto it = service_map.find(service_name);
@@ -186,7 +195,7 @@ void KrpcProvider::SendRpcResponse(const muduo::net::TcpConnectionPtr &conn, goo
     {
         std::cout << "serialize error!" << std::endl;
     }
-    conn->shutdown(); // 模拟http短链接，由rpcprovider主动断开连接
+   // conn->shutdown(); // 模拟http短链接，由rpcprovider主动断开连接
 }
 KrpcProvider::~KrpcProvider(){
     std::cout<<"~KrpcProvider()"<<std::endl;
