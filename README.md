@@ -9,36 +9,36 @@
 
 ## 运行环境
 
-    Ubuntu 20.04 LTS
+Ubuntu 20.04 LTS
 
 ## 编译指令
 
-    进入到Krpc文件
-    ```shell
-    cd Krpc
-    ```
+进入到Krpc文件
+```shell
+cd Krpc
+```
 
-    运行
-    ```shell
-    mkdir build && cd build && cmake .. && make -j${4} 
-    ```
+运行
+```shell
+mkdir build && cd build && cmake .. && make -j${4} 
+```
 
-    ```shell
-    sudo make install.
-    ```
-    
-    进入到example目录下，运行./server和./client，即可完成服务发布和调用。
-    server:
-    ```shell
-    ./server -i ../test.conf
-    ```
-    
-    client:
-    ```shell
-    ./client -i ../test.conf
-    ```
-    
-    **注意**： 需要重新编译只需要在build目录下执行MAKE -J${4} 即可。
+```shell
+sudo make install.
+```
+
+进入到example目录下，运行./server和./client，即可完成服务发布和调用。
+server:
+```shell
+./server -i ../test.conf
+```
+
+client:
+```shell
+./client -i ../test.conf
+```
+
+**注意**： 需要重新编译只需要在build目录下执行MAKE -J${4} 即可。
 ## 库准备
 
 1. Muduo 库的安装
