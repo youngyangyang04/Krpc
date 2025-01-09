@@ -18,14 +18,11 @@ Ubuntu 20.04 LTS
 cd Krpc
 ```
 
-运行
+生成项目可执行程序
 ```shell
 mkdir build && cd build && cmake .. && make -j${4} 
 ```
 
-```shell
-sudo make install.
-```
 
 进入到example目录下，运行./server和./client，即可完成服务发布和调用。
 server:
@@ -86,7 +83,7 @@ sudo apt-get install libgoogle-glog-dev libgflags-dev
 
 ## 性能测试
 
-通过运行example目录下的server和client就可以看见结果，测试了性能，但是并不是高效的。
+通过运行bin目录下的server和client就可以看见结果，测试了性能，但是并不是高效的。
 
 ## 运行结果
 ![image.png](./img/微信图片_20250108190746.png)
