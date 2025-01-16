@@ -75,15 +75,15 @@ protoc --cpp_out=. user.proto
 protoc --cpp_out=. Krpcheader.proto
 ```
 
-第五步：进入到bin文件夹下的server和client文件,分别运行./server和./client，即可完成服务发布和调用。
+第五步：进入到bin文件夹下,分别运行./server和./client，即可完成服务发布和调用。
 server:
 ```shell
-./server -i ../test.conf
+./server -i ./test.conf
 ```
 
 client:
 ```shell
-./client -i ../test.conf
+./client -i ./test.conf
 ```
 
 **注意**： 需要重新编译只需要在build目录下执行MAKE -J${4} 即可。
