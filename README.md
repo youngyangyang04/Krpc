@@ -11,21 +11,71 @@
 
 Ubuntu 22.04 LTS
 
+## 库准备
+1. 安装基础工具
+```shell
+sudo apt-get install -y wget cmake build-essential unzip
+```
+
+2. Muduo 库的安装
+Muduo 是一个基于多线程 Epoll 模式的高效网络库，负责数据流的网络通信。
+
+- 安装教程参考：[Mudo安装](https://blog.csdn.net/QIANGWEIYUAN/article/details/89023980)
+
+3. Zookeeper 的安装
+Zookeeper 负责服务注册与发现，动态记录服务的 IP 地址及端口号，以便调用端快速找到目标服务。
+
+* 安装 Zookeeper：
+```shell
+sudo apt install zookeeperd
+```
+* 安装 Zookeeper 开发库：
+```shell
+sudo apt install libzookeeper-mt-dev
+```
+4. Protobuf 的安装
+Protobuf 负责 RPC 方法的注册、数据的序列化与反序列化。
+相较于 XML 和 JSON，Protobuf 是二进制存储，效率更高。
+本地版本：3.12.4
+在 Ubuntu 22 上可以直接安装：
+```shell
+sudo apt-get install protobuf-compiler libprotobuf-dev
+```
+
+5. 安装boost库
+```shell
+sudo apt-get install -y libboost-all-dev
+```
+
+6. Glog 日志库的安装
+Glog 是一个高效的异步日志库，用于记录框架运行时的调试与错误日志。
+```shell
+sudo apt-get install libgoogle-glog-dev libgflags-dev
+```
+
 ## 编译指令
 
-进入到Krpc文件
+第一步：进入到Krpc文件
 ```shell
 cd Krpc
 ```
 
-生成项目可执行程序
+第二步：生成项目可执行程序
 ```shell
-mkdir build && cd build && cmake .. && make -j${4} 
+mkdir build && cd build && cmake .. && make -j${nproc} 
 ```
 
+第三步：然后进入到example文件夹下，找到user.proto文件执行以下命令,会生成user.pb.h和user.pb.cc：
+```shell
+protoc --cpp_out=. user.proto
+```
 
-进入到bin目录下，分别运行server和client文件下的./server和./client，即可完成服务发布和调用。
+第四步：进入到src文件下，找到Krpcheader.proto文件同样会生成如上pb.h和pb.cc文件
+```shell
+protoc --cpp_out=. Krpcheader.proto
+```
 
+第五步：进入到bin文件夹下的server和client文件,分别运行./server和./client，即可完成服务发布和调用。
 server:
 ```shell
 ./server -i ../test.conf
@@ -37,38 +87,7 @@ client:
 ```
 
 **注意**： 需要重新编译只需要在build目录下执行MAKE -J${4} 即可。
-## 库准备
 
-1. Muduo 库的安装
-Muduo 是一个基于多线程 Epoll 模式的高效网络库，负责数据流的网络通信。
-安装教程参考：[Mudo安装](https://blog.csdn.net/QIANGWEIYUAN/article/details/89023980)
-
-2. Zookeeper 的安装
-Zookeeper 负责服务注册与发现，动态记录服务的 IP 地址及端口号，以便调用端快速找到目标服务。
-安装步骤：
-安装 Zookeeper：
-```shell
-sudo apt install zookeeperd
-```
-安装 Zookeeper 开发库：
-```shell
-sudo apt install libzookeeper-mt-dev
-```
-
-3. Protobuf 的安装
-Protobuf 负责 RPC 方法的注册、数据的序列化与反序列化。
-相较于 XML 和 JSON，Protobuf 是二进制存储，效率更高。
-本地版本：3.12.4
-在 Ubuntu 22 上可以直接安装：
-```shell
-sudo apt-get install protobuf-compiler libprotobuf-dev
-```
-
-4. Glog 日志库的安装
-Glog 是一个高效的异步日志库，用于记录框架运行时的调试与错误日志。
-```shell
-sudo apt-get install libgoogle-glog-dev libgflags-dev
-```
 
 ## 整体的框架
 
