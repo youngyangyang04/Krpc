@@ -9,7 +9,7 @@
 
 ## 运行环境
 
-Ubuntu 20.04 LTS
+Ubuntu 22.04 LTS
 
 ## 编译指令
 
@@ -24,7 +24,7 @@ mkdir build && cd build && cmake .. && make -j${4}
 ```
 
 
-进入到example目录下，运行./server和./client，即可完成服务发布和调用。
+进入到bin目录下，分别运行server和client文件下的./server和./client，即可完成服务发布和调用。
 server:
 ```shell
 ./server -i ../test.conf
