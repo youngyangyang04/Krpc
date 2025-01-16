@@ -15,4 +15,4 @@ target_compile_options(server PRIVATE -std=c++11 -Wall)
 
 # 设置 server 可执行文件输出目录
 set_target_properties(server PROPERTIES
-    RUNTIME_OUTPUT_DIRECTORY ${PROJECT_SOURCE_DIR}/bin/server)
+    RUNTIME_OUTPUT_DIRECTORY ${PROJECT_SOURCE_DIR}/bin)
