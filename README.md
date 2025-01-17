@@ -78,6 +78,11 @@ protoc --cpp_out=. Krpcheader.proto
 ```
 
 第五步：进入到bin文件夹下,分别运行./server和./client，即可完成服务发布和调用。
+
+- 进入bin文件:
+```shell
+cd bin
+```
 - server:
 ```shell
 ./server -i ./test.conf
