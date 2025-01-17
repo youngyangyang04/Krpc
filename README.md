@@ -67,11 +67,13 @@ mkdir build && cd build && cmake .. && make -j${nproc}
 
 第三步：然后进入到example文件夹下，找到user.proto文件执行以下命令,会生成user.pb.h和user.pb.cc：
 ```shell
+cd example
 protoc --cpp_out=. user.proto
 ```
 
 第四步：进入到src文件下，找到Krpcheader.proto文件同样会生成如上pb.h和pb.cc文件
 ```shell
+cd src
 protoc --cpp_out=. Krpcheader.proto
 ```
 
