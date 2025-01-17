@@ -46,8 +46,8 @@ int main(int argc, char **argv)
     // 整个程序启动以后，想使用krpc框架就要先调用初始化函数(只初始化一次)
     KrpcApplication::Init(argc, argv);
     KrpcLogger logger("MyRPC");
-    const int thread_count = 1000;      // 并发线程数
-    const int requests_per_thread = 10; // 每个线程发送的请求数
+    const int thread_count = 10;      // 并发线程数
+    const int requests_per_thread = 1; // 每个线程发送的请求数
 
     std::vector<std::thread> threads;
     std::atomic<int> success_count(0);
