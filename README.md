@@ -76,12 +76,12 @@ protoc --cpp_out=. Krpcheader.proto
 ```
 
 第五步：进入到bin文件夹下,分别运行./server和./client，即可完成服务发布和调用。
-server:
+- server:
 ```shell
 ./server -i ./test.conf
 ```
 
-client:
+- client:
 ```shell
 ./client -i ./test.conf
 ```
@@ -106,7 +106,53 @@ client:
 通过运行bin目录下的server和client就可以看见结果，测试了性能，但是并不是高效的。
 
 ## 运行结果
-![image.png](./img/微信图片_20250108190746.png)
+
+通过运行 `bin` 目录下的 `server` 和 `client`，可以观察到以下结果。以下是运行日志中的关键步骤和解析：
+
+---
+
+### 服务端运行结果
+
+![服务端运行结果](./img/server.png)
+
+- **运行结果说明**：该图展示了服务器成功启动并监听客户端请求的状态。
+
+**服务器日志解析**：
+- `rpc login response success:1`  
+  - 表示客户端的登录请求成功，服务器返回响应值 `1`。
+- `session establishment complete on server`  
+  - 表示与 Zookeeper 的会话成功建立，服务端已注册在 Zookeeper 中。
+- `connect server success`  
+  - 表示服务端成功连接到目标地址。
+
+---
+
+### 客户端运行结果
+
+![客户端运行结果](./img/client.png)
+
+- **运行结果说明**：该图展示了客户端成功连接到服务器并发送请求的状态。
+
+**客户端日志解析**：
+- `doing local service: Login`  
+  - 表示客户端发起对服务 `Login` 的调用。
+- `name: zhangsan pwd: 123456`  
+  - 客户端向服务端发送了用户名 `zhangsan` 和密码 `123456`。
+- `new connection`  
+  - 客户端成功与服务端建立了一条新连接。
+
+---
+
+### 最终运行结果
+
+通过运行 `bin` 目录下的 `server` 和 `client` 可执行程序，最终结果如下：
+
+![最终结果](./img/微信图片_20250108190746.png)
+
+- **最终结果说明**：该结果表明客户端与服务端成功完成了一次 RPC 通信，包括服务调用、请求处理和结果返回，验证了框架的稳定性和功能性。
+
+---
+
 ## 总结
 - Krpc是一个基于protobuf的C++分布式网络通信框架，旨在简化微服务的部署与调用。
 - 通过结合Muduo库、Zookeeper和Glog，Krpc提供了高效的网络通信、服务注册与发现以及日志记录功能。
