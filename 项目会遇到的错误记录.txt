@@ -1,0 +1,5 @@
+1、注意ubuntu是22.04
+2、注意Protobuf版本是3.12.4
+sudo apt-get install protobuf-compiler=3.12.4-*
+sudo apt-get install libprotobuf-dev=3.12.4-*
+3、注意改一下项目中src目录下的CMakeLists.txt，原来的CMakeLists.txt文件make后会发现zoo_create 、zoo_get 等接口找不到，因为没有指定链接 lzookeeper_mt 的动态库 和 添加 -DTHREADED 编译选项，现在的CMakeLists.txt是可以的已经链接了这些库了
