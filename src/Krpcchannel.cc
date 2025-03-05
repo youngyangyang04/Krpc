@@ -10,6 +10,9 @@
 #include <sys/types.h>
 #include <arpa/inet.h>
 #include "KrpcLogger.h"
+#include <chrono>
+#include <thread>
+
 std::mutex g_data_mutx;
 // header_size+hservice_name method_name args_size+args_str
 //  这里的callmethod是给客户端stub代理进行统一做rpc方法用的数据格式序列化喝网络发送，
@@ -21,41 +24,42 @@ void KrpcChannel::CallMethod(const ::google::protobuf::MethodDescriptor *method,
                              ::google::protobuf::Message *response,
                              ::google::protobuf::Closure *done)
 {
-    if(-1==m_clientfd){
-    //获取服务对象和方法名    
-    const google::protobuf::ServiceDescriptor *sd = method->service();
-    service_name = sd->name();
-    method_name = method->name();
-    // rpc调用方也就是客户端想要调用服务器上服务对象提供的方法，需要查询zk上该服务所在的host信息。
-    ZkClient zkCli;
-    zkCli.Start(); // start返回就代表成功连接上zk服务器了
-    std::string host_data=QueryServiceHost(&zkCli, service_name, method_name,m_idx);
-    m_ip= host_data.substr(0, m_idx);
-    std::cout << "ip: " << m_ip << std::endl;
-    m_port = atoi(host_data.substr(m_idx + 1, host_data.size() - m_idx).c_str());
-    std::cout << "port: " << m_port << std::endl;
-    auto rt=newConnect(m_ip.c_str(), m_port);
-    if(!rt){
-        LOG(ERROR)<<"connect server error";
-        return;
-    }else{
-        LOG(INFO)<<"connect server success";
-    }
-    }//endif
+    auto start_time = std::chrono::high_resolution_clock::now();
 
-    // 获取参数的序列化字符串长度args_size
-    uint32_t args_size{};
-    std::string args_str;
-    if (request->SerializeToString(&args_str))
-    {
-        args_size = args_str.size();
+    LOG(INFO) << "=== 开始 RPC 调用 ===";
+    LOG(INFO) << "调用服务: " << method->service()->name();
+    LOG(INFO) << "调用方法: " << method->name();
+
+    if (!m_connection || m_connection->fd == -1) {
+        const google::protobuf::ServiceDescriptor *sd = method->service();
+        service_name = sd->name();
+        method_name = method->name();
+        
+        ZkClient zkCli;
+        zkCli.Start();
+        std::string host_data = QueryServiceHost(&zkCli, service_name, method_name, m_idx);
+        m_ip = host_data.substr(0, m_idx);
+        LOG(INFO) << "ip: " << m_ip;
+        m_port = atoi(host_data.substr(m_idx + 1, host_data.size() - m_idx).c_str());
+        LOG(INFO) << "port: " << m_port;
+
+        m_connection = KrpcConnectionPool::GetInstance().GetConnection(m_ip, m_port);
+        if (!m_connection) {
+            LOG(ERROR) << "Failed to get connection from pool";
+            controller->SetFailed("Failed to get connection from pool");
+            return;
+        }
     }
-    else
-    {
+
+    uint32_t args_size = 0;
+    std::string args_str;
+    if (request->SerializeToString(&args_str)) {
+        args_size = args_str.size();
+    } else {
         controller->SetFailed("serialize request fail");
         return;
     }
-    // 定义rpc的报文header
+
     Krpc::RpcHeader krpcheader;
     krpcheader.set_service_name(service_name);
     krpcheader.set_method_name(method_name);
@@ -63,15 +67,13 @@ void KrpcChannel::CallMethod(const ::google::protobuf::MethodDescriptor *method,
 
     uint32_t header_size = 0;
     std::string rpc_header_str;
-    if (krpcheader.SerializeToString(&rpc_header_str))
-    {
+    if (krpcheader.SerializeToString(&rpc_header_str)) {
         header_size = rpc_header_str.size();
-    }
-    else
-    {
+    } else {
         controller->SetFailed("serialize rpc header error!");
         return;
     }
+
     std::string send_rpc_str;
     {
         google::protobuf::io::StringOutputStream string_output(&send_rpc_str);
@@ -80,98 +82,106 @@ void KrpcChannel::CallMethod(const ::google::protobuf::MethodDescriptor *method,
         coded_output.WriteString(rpc_header_str);
     }
     send_rpc_str += args_str;
-    //  打印调试信息
-    // std::cout << "============================================" << std::endl;
-    // std::cout << "header_size: " << header_size << std::endl;
-    // std::cout << "rpc_header_str: " << rpc_header_str << std::endl;
-    // std::cout << "service_name: " << service_name << std::endl;
-    // std::cout << "method_name: " << method_name << std::endl;
-    // std::cout << "args_str: " << args_str << std::endl;
-    // std::cout << "============================================" << std::endl;
 
-    // 发送rpc的请求
-    if (-1 == send(m_clientfd, send_rpc_str.c_str(), send_rpc_str.size(), 0))
-    {
-        close(m_clientfd);
-        char errtxt[512] = {};
-        std::cout << "send error: " << strerror_r(errno, errtxt, sizeof(errtxt)) << std::endl;
-        controller->SetFailed(errtxt);
+    LOG(INFO) << "准备发送请求，数据大小: " << send_rpc_str.size();
+    
+    if (-1 == send(m_connection->fd, send_rpc_str.c_str(), send_rpc_str.size(), 0)) {
+        LOG(ERROR) << "发送失败，错误: " << strerror(errno);
+        KrpcConnectionPool::GetInstance().CloseConnection(m_connection);
+        m_connection = nullptr;
+        controller->SetFailed(strerror(errno));
         return;
     }
-    // 接收rpc请求的响应值
+    
+    LOG(INFO) << "请求发送成功";
+    
     char recv_buf[1024] = {0};
     int recv_size = 0;
-    if (-1 == (recv_size = recv(m_clientfd, recv_buf, 1024, 0)))
-    {
-        char errtxt[512] = {};
-        std::cout << "recv error" << strerror_r(errno, errtxt, sizeof(errtxt)) << std::endl;
-        controller->SetFailed(errtxt);
+    if (-1 == (recv_size = recv(m_connection->fd, recv_buf, 1024, 0))) {
+        KrpcConnectionPool::GetInstance().CloseConnection(m_connection);
+        m_connection = nullptr;
+        controller->SetFailed(strerror(errno));
         return;
     }
-    // 反序列化rpc调用响应数据
-    if (!response->ParseFromArray(recv_buf, recv_size))
-    {
-        close(m_clientfd);
-        char errtxt[512] = {};
-        std::cout << "parese error" << strerror_r(errno, errtxt, sizeof(errtxt)) << std::endl;
-        controller->SetFailed(errtxt);
+
+    if (!response->ParseFromArray(recv_buf, recv_size)) {
+        KrpcConnectionPool::GetInstance().CloseConnection(m_connection);
+        m_connection = nullptr;
+        controller->SetFailed("parse response error!");
         return;
     }
-    close(m_clientfd);
+
+    // Return connection to pool
+    KrpcConnectionPool::GetInstance().ReleaseConnection(m_connection);
+
+    LOG(INFO) << "收到响应，数据大小: " << recv_size;
+    LOG(INFO) << "=== RPC 调用结束 ===";
+
+    auto end_time = std::chrono::high_resolution_clock::now();
+    auto duration = std::chrono::duration_cast<std::chrono::milliseconds>(end_time - start_time);
+    
+    LOG(INFO) << "RPC 调用耗时: " << duration.count() << "ms";
 }
-bool KrpcChannel::newConnect(const char *ip, uint16_t port)
-{
-    // 使用socket网络编程
-    int clientfd = socket(AF_INET, SOCK_STREAM, 0);
-    if (-1 == clientfd)
-    {
-        char errtxt[512] = {0};
-        std::cout << "socket error" << strerror_r(errno, errtxt, sizeof(errtxt)) << std::endl;
-        LOG(ERROR)<<"socket error:"<<errtxt;
-        return false;
-    }
-    struct sockaddr_in server_addr;
-    server_addr.sin_family = AF_INET;
-    server_addr.sin_port = htons(port);
-    server_addr.sin_addr.s_addr = inet_addr(ip);
-    if (-1 == connect(clientfd, (struct sockaddr *)&server_addr, sizeof(server_addr)))
-    {
-        close(clientfd);
-         char errtxt[512] = {0};
-        std::cout << "connect error" << strerror_r(errno, errtxt, sizeof(errtxt)) << std::endl;
-        LOG(ERROR)<< "connect server error"<<errtxt;
-        return false;
-    }
-    m_clientfd = clientfd;
-    return true;
+
+bool KrpcChannel::newConnect(const char *ip, uint16_t port) {
+    m_connection = KrpcConnectionPool::GetInstance().GetConnection(ip, port);
+    return m_connection != nullptr;
 }
-std::string KrpcChannel::QueryServiceHost(ZkClient *zkclient,std::string service_name,std::string method_name,int& idx){
+
+std::string KrpcChannel::QueryServiceHost(ZkClient *zkclient, std::string service_name, std::string method_name, int& idx) {
     std::string method_path = "/" + service_name + "/" + method_name;
-    std::cout << "method_path: " << method_path << std::endl;
+    LOG(INFO) << "method_path: " << method_path;
     std::unique_lock<std::mutex> lock(g_data_mutx);
     std::string host_data_1 = zkclient->GetData(method_path.c_str());
     lock.unlock(); 
-    if (host_data_1 == "")
-    {
-        LOG(ERROR)<< method_path + " is not exist!";
-        return" ";
+    if (host_data_1 == "") {
+        LOG(ERROR) << method_path + " is not exist!";
+        return " ";
     }
     idx = host_data_1.find(":"); // 127.0.0.1:8000 获取到ip和port的分割符
-    if (idx == -1)
-    {
-        LOG(ERROR)<< method_path + " address is invalid!";
-        return" ";
+    if (idx == -1) {
+        LOG(ERROR) << method_path + " address is invalid!";
+        return " ";
     }
     return host_data_1;
 }
-KrpcChannel::KrpcChannel(bool connectNow) : m_clientfd(-1),m_idx(0)
+
+KrpcChannel::KrpcChannel(bool connectNow) : m_connection(nullptr), m_idx(0) {
+    if (!connectNow) {
+        return;
+    }
+    auto rt = newConnect(m_ip.c_str(), m_port);
+    int count = 3;
+    while (!rt && count--) {
+        rt = newConnect(m_ip.c_str(), m_port);
+    }
+}
+
+bool KrpcChannel::CallMethodWithRetry(const ::google::protobuf::MethodDescriptor *method,
+                             ::google::protobuf::RpcController *controller,
+                             const ::google::protobuf::Message *request,
+                             ::google::protobuf::Message *response,
+                             ::google::protobuf::Closure *done,
+                             int max_retries)
 {
-    if(!connectNow){
-        return ;
+    for (int i = 0; i < max_retries; i++) {
+        try {
+            LOG(INFO) << "尝试第 " << (i + 1) << " 次调用";
+            CallMethod(method, controller, request, response, done);
+            return true;
+        } catch (const std::exception& e) {
+            LOG(ERROR) << "调用失败: " << e.what();
+            if (i < max_retries - 1) {
+                LOG(INFO) << "等待重试...";
+                std::this_thread::sleep_for(std::chrono::seconds(1));
+            }
+        }
     }
-    auto rt=newConnect(m_ip.c_str(), m_port);//判断是否连接成功
-    int count=3;//重试次数
-    while(!rt&&count--){
-        rt=newConnect(m_ip.c_str(), m_port);
-    }
+    return false;
+}
+
+std::string KrpcChannel::SelectServer(const std::vector<std::string>& servers) {
+    static int current = 0;
+    current = (current + 1) % servers.size();
+    return servers[current];
 }

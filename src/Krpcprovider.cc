@@ -52,7 +52,7 @@ void KrpcProvider::Run()
     // 使用muduo网络库，创建address对象
     muduo::net::InetAddress address(ip, port);
 
-    // 创建tcpserver对戏
+    // 创建tcpserver对象
     std::shared_ptr<muduo::net::TcpServer> server = std::make_shared<muduo::net::TcpServer>(&event_loop, address, "KrpcProvider");
 
     // 绑定连接回调和消息会回调，分离了网络连接业务和消息处理业务

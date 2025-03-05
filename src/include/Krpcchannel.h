@@ -4,6 +4,10 @@
 // 目的是为了给客户端进行方法调用的时候，统一接收的
 #include <google/protobuf/service.h>
 #include "zookeeperutil.h"
+#include "KrpcConnectionPool.h"
+#include <vector>
+#include <memory>
+
 class KrpcChannel : public google::protobuf::RpcChannel
 {
 public:
@@ -16,8 +20,18 @@ public:
                     const ::google::protobuf::Message *request,
                     ::google::protobuf::Message *response,
                     ::google::protobuf::Closure *done) override; // override可以验证是否是虚函数
+
+    bool CallMethodWithRetry(const ::google::protobuf::MethodDescriptor *method,
+                           ::google::protobuf::RpcController *controller,
+                           const ::google::protobuf::Message *request,
+                           ::google::protobuf::Message *response,
+                           ::google::protobuf::Closure *done,
+                           int max_retries = 3);
+
+    std::string SelectServer(const std::vector<std::string>& servers);
+
 private:
-    int m_clientfd; // 存放客户端套接字
+    std::shared_ptr<Connection> m_connection;
     std::string service_name;
     std::string m_ip;
     uint16_t m_port;

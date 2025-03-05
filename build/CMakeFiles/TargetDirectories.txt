@@ -1,0 +1,13 @@
+/root/Krpc/build/CMakeFiles/edit_cache.dir
+/root/Krpc/build/CMakeFiles/rebuild_cache.dir
+/root/Krpc/build/src/CMakeFiles/krpc_core.dir
+/root/Krpc/build/src/CMakeFiles/edit_cache.dir
+/root/Krpc/build/src/CMakeFiles/rebuild_cache.dir
+/root/Krpc/build/example/CMakeFiles/edit_cache.dir
+/root/Krpc/build/example/CMakeFiles/rebuild_cache.dir
+/root/Krpc/build/example/callee/CMakeFiles/server.dir
+/root/Krpc/build/example/callee/CMakeFiles/edit_cache.dir
+/root/Krpc/build/example/callee/CMakeFiles/rebuild_cache.dir
+/root/Krpc/build/example/caller/CMakeFiles/client.dir
+/root/Krpc/build/example/caller/CMakeFiles/edit_cache.dir
+/root/Krpc/build/example/caller/CMakeFiles/rebuild_cache.dir

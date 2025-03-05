@@ -17,6 +17,8 @@ public:
     void Create(const char* path,const char* data,int datalen,int state=0);
     //根据参数指定的znode节点路径，或者znode节点值
     std::string GetData(const char* path);
+    // 添加新方法声明
+    bool CheckServiceHealth(const char* service_path);
 private:
     //Zk的客户端句柄
     zhandle_t* m_zhandle;
