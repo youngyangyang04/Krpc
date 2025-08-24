@@ -177,9 +177,5 @@ KrpcChannel::KrpcChannel(bool connectNow) : m_clientfd(-1), m_idx(0) {
     while (!rt && count--) {
         rt = newConnect(m_ip.c_str(), m_port);
     }
-~KrpcChannel{
-    if (socketId_ >= 0) {
-        close(socketId_);
-    }   
-}
+
 }
