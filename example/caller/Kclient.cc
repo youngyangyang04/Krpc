@@ -8,7 +8,7 @@
 #include "KrpcLogger.h"
 
 // 发送 RPC 请求的函数，模拟客户端调用远程服务
-void send_request(int thread_id, std::atomic<int> &success_count, std::atomic<int> &fail_count) {
+void send_request(int thread_id, std::atomic<int> &success_count, std::atomic<int> &fail_count,int requests_per_thread) {
     // 创建一个 UserServiceRpc_Stub 对象，用于调用远程的 RPC 方法
     Kuser::UserServiceRpc_Stub stub(new KrpcChannel(false));
 
@@ -20,21 +20,22 @@ void send_request(int thread_id, std::atomic<int> &success_count, std::atomic<in
     // 定义 RPC 方法的响应参数
     Kuser::LoginResponse response;
     Krpccontroller controller;  // 创建控制器对象，用于处理 RPC 调用过程中的错误
+    for (int i = 0; i < requests_per_thread; ++i) {
+        // 调用远程的 Login 方法
+        stub.Login(&controller, &request, &response, nullptr);
 
-    // 调用远程的 Login 方法
-    stub.Login(&controller, &request, &response, nullptr);
-
-    // 检查 RPC 调用是否成功
-    if (controller.Failed()) {  // 如果调用失败
-        std::cout << controller.ErrorText() << std::endl;  // 打印错误信息
-        fail_count++;  // 失败计数加 1
-    } else {  // 如果调用成功
-        if (0 == response.result().errcode()) {  // 检查响应中的错误码
-            std::cout << "rpc login response success:" << response.success() << std::endl;  // 打印成功信息
-            success_count++;  // 成功计数加 1
-        } else {  // 如果响应中有错误
-            std::cout << "rpc login response error : " << response.result().errmsg() << std::endl;  // 打印错误信息
+        // 检查 RPC 调用是否成功
+        if (controller.Failed()) {  // 如果调用失败
+            std::cout << controller.ErrorText() << std::endl;  // 打印错误信息
             fail_count++;  // 失败计数加 1
+        } else {  // 如果调用成功
+            if (int{} == response.result().errcode()) {  // 检查响应中的错误码
+                std::cout << "rpc login response success:" << response.success() << std::endl;  // 打印成功信息
+                success_count++;  // 成功计数加 1
+            } else {  // 如果响应中有错误
+                std::cout << "rpc login response error : " << response.result().errmsg() << std::endl;  // 打印错误信息
+                fail_count++;  // 失败计数加 1
+            }
         }
     }
 }
@@ -46,8 +47,8 @@ int main(int argc, char **argv) {
     // 创建日志对象
     KrpcLogger logger("MyRPC");
 
-    const int thread_count = 10;       // 并发线程数
-    const int requests_per_thread = 1; // 每个线程发送的请求数
+    const int thread_count =5000;       // 并发线程数
+    const int requests_per_thread = 1000; // 每个线程发送的请求数
 
     std::vector<std::thread> threads;  // 存储线程对象的容器
     std::atomic<int> success_count(0); // 成功请求的计数器
@@ -59,7 +60,7 @@ int main(int argc, char **argv) {
     for (int i = 0; i < thread_count; i++) {
         threads.emplace_back([argc, argv, i, &success_count, &fail_count, requests_per_thread]() {
             for (int j = 0; j < requests_per_thread; j++) {
-                send_request(i, success_count, fail_count);  // 每个线程发送指定数量的请求
+                send_request(i, success_count, fail_count,requests_per_thread);  // 每个线程发送指定数量的请求
             }
         });
     }
