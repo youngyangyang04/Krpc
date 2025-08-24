@@ -109,7 +109,7 @@ void KrpcChannel::CallMethod(const ::google::protobuf::MethodDescriptor *method,
         return;
     }
 
-    close(m_clientfd);  // 关闭socket连接
+   // close(m_clientfd);  // 关闭socket连接
 }
 
 // 创建新的socket连接
@@ -177,4 +177,5 @@ KrpcChannel::KrpcChannel(bool connectNow) : m_clientfd(-1), m_idx(0) {
     while (!rt && count--) {
         rt = newConnect(m_ip.c_str(), m_port);
     }
+
 }
