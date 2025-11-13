@@ -1,5 +1,7 @@
 # Krpc
 
+> **本项目目前只在[知识星球](https://programmercarl.com/other/kstar.html)答疑并维护**。
+
 本项目如果是有C++语法基础的录友，且做过[知识星球](https://programmercarl.com/other/kstar.html)的：[基于Raft共识算法的KV数据库](https://programmercarl.com/other/project_fenbushi.html)，[协程库](https://programmercarl.com/other/project_coroutine.html)，那大家上手这个项目的时间会非常快：
 
 学习时间：一天只需要抽3-4个小时，看3天左右基本能看完整个项目。
