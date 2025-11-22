@@ -4,6 +4,8 @@
 #include "KrpcLogger.h"
 #include <iostream>
 
+
+
 // 注册服务对象及其方法，以便服务端能够处理客户端的RPC请求
 void KrpcProvider::NotifyService(google::protobuf::Service *service) {
     // 服务端需要知道客户端想要调用的服务对象和方法，
@@ -97,90 +99,102 @@ void KrpcProvider::OnConnection(const muduo::net::TcpConnectionPtr &conn) {
 void KrpcProvider::OnMessage(const muduo::net::TcpConnectionPtr &conn, muduo::net::Buffer *buffer, muduo::Timestamp receive_time) {
     std::cout << "OnMessage" << std::endl;
 
-    // 从网络缓冲区中读取远程RPC调用请求的字符流
-    std::string recv_buf = buffer->retrieveAllAsString();
+     // 循环处理缓冲区，解决粘包问题
+    while (buffer->readableBytes() >= 4) {
+        // 1. 预读取前4个字节（Total Length）
+        // peek() 不会移动 buffer 的读指针
+        uint32_t total_len = 0;
+        std::memcpy(&total_len, buffer->peek(), 4);
+        total_len = ntohl(total_len); // 网络字节序转主机字节序
 
-    // 使用protobuf的CodedInputStream反序列化RPC请求
-    google::protobuf::io::ArrayInputStream raw_input(recv_buf.data(), recv_buf.size());
-    google::protobuf::io::CodedInputStream coded_input(&raw_input);
+        // 2. 检查数据是否完整（拆包处理）
+        // 如果缓冲区剩余数据 小于 4字节长度头 + 内容长度，说明包没收全，退出等待下一次
+        if (buffer->readableBytes() < 4 + total_len) {
+            break; 
+        }
 
-    uint32_t header_size{};
-    coded_input.ReadVarint32(&header_size);  // 解析header_size
+        // --- 数据包完整，开始解包 ---
+        
+        // 3. 真正读取数据
+        buffer->retrieve(4); // 消耗掉前4个字节的长度头
+        
+        // 读取 4字节的 Header Length
+        uint32_t header_len = 0;
+        const char* data_ptr = buffer->peek();
+        std::memcpy(&header_len, data_ptr, 4);
+        header_len = ntohl(header_len);
+        
+        buffer->retrieve(4); // 消耗掉 header length
 
-    // 根据header_size读取数据头的原始字符流，反序列化数据，得到RPC请求的详细信息
-    std::string rpc_header_str;
-    Krpc::RpcHeader krpcHeader;
-    std::string service_name;
-    std::string method_name;
-    uint32_t args_size{};
+        // 读取 Header 数据
+        std::string rpc_header_str(buffer->peek(), header_len);
+        Krpc::RpcHeader krpcHeader;
+        buffer->retrieve(header_len); // 消耗掉 header data
 
-    // 设置读取限制
-    google::protobuf::io::CodedInputStream::Limit msg_limit = coded_input.PushLimit(header_size);
-    coded_input.ReadString(&rpc_header_str, header_size);
-    // 恢复之前的限制，以便安全地继续读取其他数据
-    coded_input.PopLimit(msg_limit);
+        // 读取 Body 数据 (args)
+        uint32_t args_size = total_len - 4 - header_len; // 总长度 - header长度字段(4) - header内容
+        std::string args_str(buffer->peek(), args_size);
+        buffer->retrieve(args_size); // 消耗掉 body data
 
-    if (krpcHeader.ParseFromString(rpc_header_str)) {
-        service_name = krpcHeader.service_name();
-        method_name = krpcHeader.method_name();
-        args_size = krpcHeader.args_size();
-    } else {
-        KrpcLogger::ERROR("krpcHeader parse error");
-        return;
+        // 4. 业务逻辑处理
+        if (!krpcHeader.ParseFromString(rpc_header_str)) {
+            std::cout << "header parse error" << std::endl;
+            return;
+        }
+        
+        std::string service_name = krpcHeader.service_name();
+        std::string method_name = krpcHeader.method_name();
+
+        auto it = service_map.find(service_name);
+        if (it == service_map.end()) {
+            std::cout << service_name << " is not exist!" << std::endl;
+            return;
+        }
+        auto mit = it->second.method_map.find(method_name);
+        if (mit == it->second.method_map.end()) {
+            std::cout << service_name << "." << method_name << " is not exist!" << std::endl;
+            return;
+        }
+
+        google::protobuf::Service *service = it->second.service;
+        const google::protobuf::MethodDescriptor *method = mit->second;
+
+        google::protobuf::Message *request = service->GetRequestPrototype(method).New();
+        if (!request->ParseFromString(args_str)) {
+            std::cout << "request parse error" << std::endl;
+            return;
+        }
+        google::protobuf::Message *response = service->GetResponsePrototype(method).New();
+
+        google::protobuf::Closure *done = google::protobuf::NewCallback<KrpcProvider,
+                                                                        const muduo::net::TcpConnectionPtr &,
+                                                                        google::protobuf::Message *>(this,
+                                                                                                     &KrpcProvider::SendRpcResponse,
+                                                                                                     conn, response);
+        service->CallMethod(method, nullptr, request, response, done);
     }
-
-    std::string args_str;  // RPC参数
-    // 直接读取args_size长度的字符串数据
-    bool read_args_success = coded_input.ReadString(&args_str, args_size);
-    if (!read_args_success) {
-        KrpcLogger::ERROR("read args error");
-        return;
-    }
-
-    // 获取service对象和method对象
-    auto it = service_map.find(service_name);
-    if (it == service_map.end()) {
-        std::cout << service_name << " is not exist!" << std::endl;
-        return;
-    }
-    auto mit = it->second.method_map.find(method_name);
-    if (mit == it->second.method_map.end()) {
-        std::cout << service_name << "." << method_name << " is not exist!" << std::endl;
-        return;
-    }
-
-    google::protobuf::Service *service = it->second.service;  // 获取服务对象
-    const google::protobuf::MethodDescriptor *method = mit->second;  // 获取方法对象
-
-    // 生成RPC方法调用请求的request和响应的response参数
-    google::protobuf::Message *request = service->GetRequestPrototype(method).New();  // 动态创建请求对象
-    if (!request->ParseFromString(args_str)) {
-        std::cout << service_name << "." << method_name << " parse error!" << std::endl;
-        return;
-    }
-    google::protobuf::Message *response = service->GetResponsePrototype(method).New();  // 动态创建响应对象
-
-    // 绑定回调函数，用于在方法调用完成后发送响应
-    google::protobuf::Closure *done = google::protobuf::NewCallback<KrpcProvider,
-                                                                    const muduo::net::TcpConnectionPtr &,
-                                                                    google::protobuf::Message *>(this,
-                                                                                                 &KrpcProvider::SendRpcResponse,
-                                                                                                 conn, response);
-
-    // 在框架上根据远端RPC请求，调用当前RPC节点上发布的方法
-    service->CallMethod(method, nullptr, request, response, done);  // 调用服务方法
 }
 
 // 发送RPC响应给客户端
 void KrpcProvider::SendRpcResponse(const muduo::net::TcpConnectionPtr &conn, google::protobuf::Message *response) {
     std::string response_str;
     if (response->SerializeToString(&response_str)) {
-        // 序列化成功，通过网络把RPC方法执行的结果返回给RPC调用方
-        conn->send(response_str);
+        // 构造响应：[4 bytes Total Len] + [Response Data]
+        uint32_t len = response_str.size();
+        uint32_t net_len = htonl(len);
+
+        std::string send_buf;
+        send_buf.resize(4 + len);
+        
+        // 填入长度
+        std::memcpy(&send_buf[0], &net_len, 4);
+        // 填入数据
+        std::memcpy(&send_buf[4], response_str.data(), len);
+
+        conn->send(send_buf);
     } else {
-        std::cout << "serialize error!" << std::endl;
+        std::cout << "serialize response error!" << std::endl;
     }
-    // conn->shutdown(); // 模拟HTTP短链接，由RpcProvider主动断开连接
 }
 
 // 析构函数，退出事件循环
