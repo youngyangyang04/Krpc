@@ -13,6 +13,22 @@
 
 std::mutex g_data_mutx;  // 全局互斥锁，用于保护共享数据的线程安全
 
+
+// 辅助函数：循环读取直到读够 size 字节
+ssize_t KrpcChannel::recv_exact(int fd, char* buf, size_t size) {
+    size_t total_read = 0;
+    while (total_read < size) {
+        ssize_t ret = recv(fd, buf + total_read, size - total_read, 0);
+        if (ret == 0) return 0; // 对端关闭
+        if (ret == -1) {
+            if (errno == EINTR) continue; // 中断信号，继续读
+            return -1; // 错误
+        }
+        total_read += ret;
+    }
+    return total_read;
+}
+
 // RPC调用的核心方法，负责将客户端的请求序列化并发送到服务端，同时接收服务端的响应
 void KrpcChannel::CallMethod(const ::google::protobuf::MethodDescriptor *method,
                              ::google::protobuf::RpcController *controller,
@@ -45,71 +61,80 @@ void KrpcChannel::CallMethod(const ::google::protobuf::MethodDescriptor *method,
         }
     }  // endif
 
-    // 将请求参数序列化为字符串，并计算其长度
-    uint32_t args_size{};
+     // 2. 序列化请求参数
     std::string args_str;
-    if (request->SerializeToString(&args_str)) {  // 序列化请求参数
-        args_size = args_str.size();  // 获取序列化后的长度
-    } else {
-        controller->SetFailed("serialize request fail");  // 序列化失败，设置错误信息
+    if (!request->SerializeToString(&args_str)) {
+        controller->SetFailed("serialize request fail");
         return;
     }
 
-    // 定义RPC请求的头部信息
+    // 3. 构建协议头
     Krpc::RpcHeader krpcheader;
-    krpcheader.set_service_name(service_name);  // 设置服务名
-    krpcheader.set_method_name(method_name);  // 设置方法名
-    krpcheader.set_args_size(args_size);  // 设置参数长度
+    krpcheader.set_service_name(service_name);
+    krpcheader.set_method_name(method_name);
+    krpcheader.set_args_size(args_str.size());
 
-    // 将RPC头部信息序列化为字符串，并计算其长度
-    uint32_t header_size = 0;
     std::string rpc_header_str;
-    if (krpcheader.SerializeToString(&rpc_header_str)) {  // 序列化头部信息
-        header_size = rpc_header_str.size();  // 获取序列化后的长度
-    } else {
-        controller->SetFailed("serialize rpc header error!");  // 序列化失败，设置错误信息
+    if (!krpcheader.SerializeToString(&rpc_header_str)) {
+        controller->SetFailed("serialize rpc header error!");
         return;
     }
 
-    // 将头部长度和头部信息拼接成完整的RPC请求报文
+    // 4. 打包数据发送
+    // 格式：[4B Total Len] + [4B Header Len] + [Header] + [Args]
+    
+    uint32_t header_size = rpc_header_str.size();
+    uint32_t total_len = 4 + header_size + args_str.size(); // Total Len 包含 HeaderLen(4) + Header + Body
+    
+    // 转网络字节序
+    uint32_t net_total_len = htonl(total_len);
+    uint32_t net_header_len = htonl(header_size);
+
     std::string send_rpc_str;
-    {
-        google::protobuf::io::StringOutputStream string_output(&send_rpc_str);
-        google::protobuf::io::CodedOutputStream coded_output(&string_output);
-        coded_output.WriteVarint32(static_cast<uint32_t>(header_size));  // 写入头部长度
-        coded_output.WriteString(rpc_header_str);  // 写入头部信息
-    }
-    send_rpc_str += args_str;  // 拼接请求参数
+    send_rpc_str.reserve(4 + 4 + header_size + args_str.size());
+    
+    send_rpc_str.append((char*)&net_total_len, 4);
+    send_rpc_str.append((char*)&net_header_len, 4);
+    send_rpc_str.append(rpc_header_str);
+    send_rpc_str.append(args_str);
 
-    // 发送RPC请求到服务器
+    // 发送
     if (-1 == send(m_clientfd, send_rpc_str.c_str(), send_rpc_str.size(), 0)) {
-        close(m_clientfd);  // 发送失败，关闭socket
-        char errtxt[512] = {};
-        std::cout << "send error: " << strerror_r(errno, errtxt, sizeof(errtxt)) << std::endl;  // 打印错误信息
-        controller->SetFailed(errtxt);  // 设置错误信息
+        close(m_clientfd);
+        m_clientfd = -1; // 重置
+        controller->SetFailed("send error");
         return;
     }
 
-    // 接收服务器的响应
-    char recv_buf[1024] = {0};
-    int recv_size = 0;
-    if (-1 == (recv_size = recv(m_clientfd, recv_buf, 1024, 0))) {
-        char errtxt[512] = {};
-        std::cout << "recv error" << strerror_r(errno, errtxt, sizeof(errtxt)) << std::endl;  // 打印错误信息
-        controller->SetFailed(errtxt);  // 设置错误信息
+    // 5. 接收响应
+    // 格式：[4B Total Len] + [Response Data]
+    
+    // A. 先读4字节长度头
+    uint32_t response_len = 0;
+    if (recv_exact(m_clientfd, (char*)&response_len, 4) != 4) {
+        close(m_clientfd);
+        m_clientfd = -1;
+        controller->SetFailed("recv response length error");
+        return;
+    }
+    response_len = ntohl(response_len); // 转回主机字节序
+
+    // B. 根据长度读取Body
+    std::vector<char> recv_buf(response_len);
+    if (recv_exact(m_clientfd, recv_buf.data(), response_len) != response_len) {
+        close(m_clientfd);
+        m_clientfd = -1;
+        controller->SetFailed("recv response body error");
         return;
     }
 
-    // 将接收到的响应数据反序列化为response对象
-    if (!response->ParseFromArray(recv_buf, recv_size)) {
-        close(m_clientfd);  // 反序列化失败，关闭socket
-        char errtxt[512] = {};
-        std::cout << "parse error" << strerror_r(errno, errtxt, sizeof(errtxt)) << std::endl;  // 打印错误信息
-        controller->SetFailed(errtxt);  // 设置错误信息
+    // 6. 反序列化响应
+    if (!response->ParseFromArray(recv_buf.data(), response_len)) {
+        close(m_clientfd);
+        m_clientfd = -1;
+        controller->SetFailed("parse response error");
         return;
     }
-
-   // close(m_clientfd);  // 关闭socket连接
 }
 
 // 创建新的socket连接

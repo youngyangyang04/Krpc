@@ -10,7 +10,9 @@ public:
     KrpcChannel(bool connectNow);
     virtual ~KrpcChannel()
     {
-        
+          if (m_clientfd >= 0) {
+        close(m_clientfd);
+    }  
     }
     void CallMethod(const ::google::protobuf::MethodDescriptor *method,
                     ::google::protobuf::RpcController *controller,
@@ -26,5 +28,7 @@ private:
     int m_idx; // 用来划分服务器ip和port的下标
     bool newConnect(const char *ip, uint16_t port);
     std::string QueryServiceHost(ZkClient *zkclient, std::string service_name, std::string method_name, int &idx);
+       // 新增：确保读取指定长度的数据，解决TCP拆包
+    ssize_t recv_exact(int fd, char* buf, size_t size);
 };
 #endif
