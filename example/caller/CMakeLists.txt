@@ -11,7 +11,7 @@ add_executable(client ${Client_SRCS} ${PROTO_SRCS})
 target_link_libraries(client krpc_core ${LIBS})
 
 # 设置编译选项
-target_compile_options(client PRIVATE -std=c++11 -Wall)
+target_compile_options(client PRIVATE -std=c++14 -Wall)
 
 # 设置 client 可执行文件输出目录
 set_target_properties(client PROPERTIES
